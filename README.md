@@ -1,4 +1,9 @@
-# EXEX - Local Execution Daemon
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/3df5157a-e2a0-40a3-9e9e-b402f4b642b5" alt="EXEX Logo" width="400"/>
+</p>
+
+<h1 align="center">EXEX - Local Execution Daemon</h1>
+
 
 A secure, modular, and comprehensive local API server built with Rust and Actix-Web that enables frontend applications to perform safe file operations, command execution, directory management, and application launching on the user's computer through HTTP APIs.
 
