@@ -785,8 +785,8 @@ cargo test --test integration
 1. **Clone and build:**
 
    ```bash
-   git clone <repository>
-   cd exex
+   git clone https://github.com/muhammad-fiaz/EXEX.git
+   cd EXEX
    cargo build --release
    ```
 
@@ -1101,50 +1101,138 @@ CMD ["exex"]
 }
 ```
 
-## 📈 Roadmap
+## License
 
-### Planned Features
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-- **File Watching**: Real-time file system monitoring
-- **WebSocket Support**: Real-time bidirectional communication
-- **Plugin System**: Extensible plugin architecture
-- **GUI Dashboard**: Web-based administration interface
-- **API Versioning**: Support for multiple API versions
-- **Rate Limiting**: Request throttling and quota management
-- **Database Integration**: SQLite support for persistent storage
-- **Encryption**: File encryption/decryption operations
+## Contributing
 
-### Version History
+We welcome contributions to EXEX! Please follow these guidelines:
 
-- **v1.0.0**: Initial release with core functionality
-- **v1.1.0**: Added security model and configuration
-- **v1.2.0**: Enhanced error handling and logging
-- **v1.3.0**: PowerShell test suite and documentation
-- **v2.0.0**: Modular architecture and comprehensive API
+### Getting Started
 
-## 💡 Tips & Best Practices
+1. **Fork the repository** on GitHub
+2. **Clone your fork** locally:
 
-### Development Tips
+   ```bash
+   git clone https://github.com/your-username/EXEX.git
+   cd EXEX
+   ```
 
-1. **Use Type Safety**: Leverage Rust's type system for safety
-2. **Error Handling**: Always handle errors gracefully
-3. **Testing**: Write tests before implementing features
-4. **Documentation**: Keep documentation updated with code
-5. **Security**: Security should be the default, not an afterthought
+3. **Create a feature branch**:
 
-### Client Integration
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
 
-1. **Retry Logic**: Implement exponential backoff for retries
-2. **Timeout Handling**: Set appropriate timeouts for operations
-3. **Error Recovery**: Handle network and server errors gracefully
-4. **Batching**: Use batch operations for better performance
-5. **Caching**: Cache results when appropriate
+### Development Setup
 
-### Performance Tips
+1. **Install Rust** (if not already installed):
 
-1. **Connection Reuse**: Reuse HTTP connections
-2. **Parallel Operations**: Use async/await for concurrent operations
-3. **Streaming**: Use streaming for large files
-4. **Memory Management**: Monitor memory usage in long-running processes
-5. **Resource Cleanup**: Always clean up resources after use
-```
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+2. **Build the project**:
+
+   ```bash
+   cargo build
+   ```
+
+3. **Run tests**:
+
+   ```bash
+   cargo test
+   ```
+
+4. **Run the test suite**:
+
+   ```powershell
+   # PowerShell
+   .\tests\console-test-suite.ps1
+   ```
+
+### Code Standards
+
+- **Follow Rust conventions**: Use `rustfmt` and `clippy`
+
+  ```bash
+  cargo fmt
+  cargo clippy
+  ```
+
+- **Write tests**: All new features should include unit tests and integration tests
+- **Document your code**: Use doc comments for public APIs
+- **Security first**: Always consider security implications of changes
+
+### What to Contribute
+
+- **Bug fixes**: Fix issues and include tests
+- **New features**: Add new file operations, security enhancements, or platform support
+- **Documentation**: Improve README, code comments, or API documentation
+- **Tests**: Add test coverage for existing functionality
+- **Performance**: Optimize existing operations
+
+### Submitting Changes
+
+1. **Ensure all tests pass**:
+
+   ```bash
+   cargo test
+   cargo clippy
+   cargo fmt --check
+   ```
+
+2. **Run the PowerShell test suite**:
+
+   ```powershell
+   .\tests\console-test-suite.ps1
+   ```
+
+3. **Commit your changes**:
+
+   ```bash
+   git add .
+   git commit -m "feat: add your feature description"
+   ```
+
+   Use conventional commit messages:
+   - `feat:` for new features
+   - `fix:` for bug fixes
+   - `docs:` for documentation
+   - `test:` for tests
+   - `refactor:` for code refactoring
+   - `security:` for security improvements
+
+4. **Push to your fork**:
+
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+5. **Create a Pull Request** on GitHub with:
+   - Clear description of changes
+   - Reference to any related issues
+   - Test results and evidence
+
+### Security Considerations
+
+- **Never commit sensitive data** (API keys, passwords, personal paths)
+- **Test security features** thoroughly, especially path validation and command filtering
+- **Report security vulnerabilities** privately to maintainers before public disclosure
+- **Follow secure coding practices** for file operations and command execution
+
+### Code Review Process
+
+1. All submissions require review from maintainers
+2. Address feedback and update your PR
+3. Ensure CI/CD checks pass
+4. Maintainers will merge approved PRs
+
+### Questions or Help?
+
+- **Open an issue** for bugs or feature requests
+- **Start a discussion** for questions about usage or architecture
+- **Check existing issues** before creating new ones
+
+Thank you for contributing to EXEX! 🚀
