@@ -1,0 +1,19 @@
+EXEX Test Data File
+==================
+
+This is a test file used for testing read operations in the EXEX system.
+
+Content includes:
+- Plain text
+- UTF-8 characters: ñáéíóú
+- Numbers: 12345
+- Special characters: !@#$%^&*()
+- Multiple lines
+
+Line 1: Hello World
+Line 2: Testing EXEX functionality
+Line 3: Security and file operations
+Line 4: End of test data
+
+Created: 2025-06-28
+Purpose: Integration testing for EXEX daemon

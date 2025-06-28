@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EXEX Client Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .response {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: 'Consolas', 'Monaco', monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+            background-color: #d4edda;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+            background-color: #f8d7da;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.healthy {
+            background-color: #28a745;
+            color: white;
+        }
+        .status.unhealthy {
+            background-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>EXEX - Local Execution Daemon Client</h1>
+    
+    <div class="container">
+        <h2>Server Status</h2>
+        <button onclick="checkHealth()">Check Health</button>
+        <span id="healthStatus"></span>
+        <div id="healthResponse" class="response" style="display: none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>Execute Command</h2>
+        <div class="form-group">
+            <label for="command">Command:</label>
+            <input type="text" id="command" placeholder="e.g., dir, npm --version, python --version" value="dir">
+        </div>
+        <div class="form-group">
+            <label for="cwd">Working Directory (optional):</label>
+            <input type="text" id="cwd" placeholder="e.g., C:/Users/YourName/Desktop">
+        </div>
+        <button onclick="executeCommand()">Execute</button>
+        <div id="execResponse" class="response" style="display: none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>Read File</h2>
+        <div class="form-group">
+            <label for="readPath">File Path:</label>
+            <input type="text" id="readPath" placeholder="e.g., C:/Users/YourName/Desktop/test.txt">
+        </div>
+        <button onclick="readFile()">Read File</button>
+        <div id="readResponse" class="response" style="display: none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>Write File</h2>
+        <div class="form-group">
+            <label for="writePath">File Path:</label>
+            <input type="text" id="writePath" placeholder="e.g., C:/Users/YourName/Desktop/output.txt">
+        </div>
+        <div class="form-group">
+            <label for="writeContent">Content:</label>
+            <textarea id="writeContent" placeholder="Enter file content here...">Hello from EXEX!
+This is a test file created by the EXEX client.
+Current time: ${new Date().toISOString()}</textarea>
+        </div>
+        <button onclick="writeFile()">Write File</button>
+        <div id="writeResponse" class="response" style="display: none;"></div>
+    </div>
+
+    <script>
+        const EXEX_BASE_URL = 'http://127.0.0.1:8080';
+
+        async function makeRequest(endpoint, data = null) {
+            try {
+                const options = {
+                    method: data ? 'POST' : 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                };
+                
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(`${EXEX_BASE_URL}${endpoint}`, options);
+                const result = await response.json();
+                
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    data: result
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+
+        function displayResponse(elementId, response, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = `response ${isSuccess ? 'success' : 'error'}`;
+            
+            if (typeof response === 'object') {
+                element.textContent = JSON.stringify(response, null, 2);
+            } else {
+                element.textContent = response;
+            }
+        }
+
+        async function checkHealth() {
+            const response = await makeRequest('/health');
+            const statusElement = document.getElementById('healthStatus');
+            
+            if (response.success) {
+                statusElement.innerHTML = '<span class="status healthy">HEALTHY</span>';
+                displayResponse('healthResponse', response.data, true);
+            } else {
+                statusElement.innerHTML = '<span class="status unhealthy">UNHEALTHY</span>';
+                displayResponse('healthResponse', response.error || 'Connection failed', false);
+            }
+        }
+
+        async function executeCommand() {
+            const command = document.getElementById('command').value;
+            const cwd = document.getElementById('cwd').value;
+            
+            if (!command.trim()) {
+                alert('Please enter a command');
+                return;
+            }
+
+            const data = {
+                command: command.trim(),
+                cwd: cwd.trim() || undefined
+            };
+
+            const response = await makeRequest('/api/exec', data);
+            
+            if (response.success) {
+                displayResponse('execResponse', response.data, response.data.success);
+            } else {
+                displayResponse('execResponse', response.error || 'Request failed', false);
+            }
+        }
+
+        async function readFile() {
+            const path = document.getElementById('readPath').value;
+            
+            if (!path.trim()) {
+                alert('Please enter a file path');
+                return;
+            }
+
+            const data = { path: path.trim() };
+            const response = await makeRequest('/api/read', data);
+            
+            if (response.success) {
+                displayResponse('readResponse', response.data, response.data.success);
+            } else {
+                displayResponse('readResponse', response.error || 'Request failed', false);
+            }
+        }
+
+        async function writeFile() {
+            const path = document.getElementById('writePath').value;
+            let content = document.getElementById('writeContent').value;
+            
+            if (!path.trim()) {
+                alert('Please enter a file path');
+                return;
+            }
+
+            // Replace template variables in content
+            content = content.replace('${new Date().toISOString()}', new Date().toISOString());
+
+            const data = {
+                path: path.trim(),
+                content: content
+            };
+
+            const response = await makeRequest('/api/write', data);
+            
+            if (response.success) {
+                displayResponse('writeResponse', response.data, response.data.success);
+            } else {
+                displayResponse('writeResponse', response.error || 'Request failed', false);
+            }
+        }
+
+        // Check health on page load
+        window.addEventListener('load', checkHealth);
+    </script>
+</body>
+</html>
