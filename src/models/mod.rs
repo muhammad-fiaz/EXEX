@@ -4,8 +4,41 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     pub version: String,
-    pub exex_project: String,
-    pub created: String,
+    pub server: ServerConfig,
+    pub security: SecurityConfig,
+    pub logging: LoggingConfig,
+}
+
+/// Server configuration
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ServerConfig {
+    pub host: String,
+    pub port: u16,
+}
+
+/// Security configuration
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SecurityConfig {
+    pub allowed_paths: Vec<String>,
+    pub disallowed_paths: Vec<String>,
+    pub command_whitelist: Vec<String>,
+    pub command_blacklist: Option<Vec<String>>,
+    pub max_file_size_mb: u64,
+}
+
+/// Logging configuration
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LoggingConfig {
+    pub level: String,
+    pub audit_file: String,
+}
+
+/// Legacy config support for backward compatibility
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LegacyConfig {
+    pub version: String,
+    pub exex_project: Option<String>,
+    pub created: Option<String>,
     pub disallowed_paths: Vec<String>,
     pub allowed_paths: Vec<String>,
 }
@@ -14,6 +47,7 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 pub struct ExecRequest {
     pub command: String,
+    pub args: Option<Vec<String>>,
     pub cwd: Option<String>,
 }
 

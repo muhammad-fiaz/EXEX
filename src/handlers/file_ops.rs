@@ -50,7 +50,7 @@ pub async fn read_file(
     }
 }
 
-/// Handles file writing requests
+/// Handles file writing requests with size validation
 pub async fn write_file(
     security: web::Data<Arc<SecurityManager>>,
     req: web::Json<WriteRequest>,
@@ -61,6 +61,14 @@ pub async fn write_file(
         return Ok(HttpResponse::Forbidden().json(WriteResponse {
             success: false,
             error: Some(format!("Access denied to file: {}", req.path)),
+        }));
+    }
+
+    // Check file size limit
+    if !security.is_file_size_allowed(req.content.len() as u64) {
+        return Ok(HttpResponse::Forbidden().json(WriteResponse {
+            success: false,
+            error: Some(format!("File size exceeds maximum allowed size")),
         }));
     }
 

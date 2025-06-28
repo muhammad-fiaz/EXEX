@@ -25,6 +25,9 @@ async fn main() -> std::io::Result<()> {
 
     // Load configuration
     let config = load_config();
+    let server_host = config.server.host.clone();
+    let server_port = config.server.port;
+    
     let security_manager = Arc::new(SecurityManager::new(config));
 
     info!("Loaded {} disallowed paths", security_manager.get_disallowed_paths().len());
@@ -38,7 +41,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Start HTTP server
-    let bind_address = "127.0.0.1:8080";
+    let bind_address = format!("{}:{}", server_host, server_port);
     info!("Starting server on http://{}", bind_address);
 
     HttpServer::new(move || {
@@ -76,7 +79,7 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/health", web::get().to(health_check))
     })
-    .bind(bind_address)?
+    .bind(&bind_address)?
     .run()
     .await
 }

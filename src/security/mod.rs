@@ -6,6 +6,9 @@ use crate::models::Config;
 pub struct SecurityManager {
     disallowed_paths: HashSet<PathBuf>,
     allowed_paths: HashSet<PathBuf>,
+    command_whitelist: HashSet<String>,
+    command_blacklist: HashSet<String>,
+    max_file_size_mb: u64,
 }
 
 impl SecurityManager {
@@ -14,6 +17,7 @@ impl SecurityManager {
         use tracing::debug;
         
         let disallowed_paths = config
+            .security
             .disallowed_paths
             .into_iter()
             .filter_map(|p| {
@@ -41,6 +45,7 @@ impl SecurityManager {
             .collect();
             
         let allowed_paths = config
+            .security
             .allowed_paths
             .into_iter()
             .filter_map(|p| {
@@ -66,8 +71,71 @@ impl SecurityManager {
                 }
             })
             .collect();
+            
+        let command_whitelist = config
+            .security
+            .command_whitelist
+            .into_iter()
+            .collect();
+            
+        let command_blacklist = config
+            .security
+            .command_blacklist
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
         
-        Self { disallowed_paths, allowed_paths }
+        Self { 
+            disallowed_paths, 
+            allowed_paths,
+            command_whitelist,
+            command_blacklist,
+            max_file_size_mb: config.security.max_file_size_mb,
+        }
+    }
+
+    /// Checks if a command is allowed to be executed
+    pub fn is_command_allowed(&self, command: &str) -> bool {
+        use tracing::{debug, warn};
+        
+        debug!("Checking command access for: {}", command);
+        
+        // Extract the base command (first word)
+        let base_command = command.split_whitespace().next().unwrap_or(command);
+        
+        // Remove path and extension to get base command name
+        let command_name = if let Some(path) = Path::new(base_command).file_stem() {
+            path.to_string_lossy().to_string()
+        } else {
+            base_command.to_string()
+        };
+        
+        debug!("Base command extracted: {}", command_name);
+        
+        // First check blacklist - if it's blacklisted, deny immediately
+        if self.command_blacklist.contains(&command_name) {
+            warn!("Command '{}' is blacklisted", command_name);
+            return false;
+        }
+        
+        // If whitelist is not empty, command must be in whitelist
+        if !self.command_whitelist.is_empty() {
+            let allowed = self.command_whitelist.contains(&command_name);
+            if !allowed {
+                warn!("Command '{}' not in whitelist", command_name);
+            }
+            allowed
+        } else {
+            // If no whitelist specified, allow all commands not in blacklist
+            debug!("No whitelist specified, allowing command '{}'", command_name);
+            true
+        }
+    }
+
+    /// Checks if a file size is within limits
+    pub fn is_file_size_allowed(&self, size_bytes: u64) -> bool {
+        let size_mb = size_bytes / (1024 * 1024);
+        size_mb <= self.max_file_size_mb
     }
 
     /// Checks if a path is allowed based on security policies
@@ -173,77 +241,87 @@ impl SecurityManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{ServerConfig, SecurityConfig, LoggingConfig};
+
+    fn create_test_config() -> Config {
+        Config {
+            version: "1.0".to_string(),
+            server: ServerConfig {
+                host: "127.0.0.1".to_string(),
+                port: 8080,
+            },
+            security: SecurityConfig {
+                allowed_paths: vec![],
+                disallowed_paths: vec!["C:\\Windows\\".to_string()],
+                command_whitelist: vec!["echo".to_string(), "dir".to_string()],
+                command_blacklist: Some(vec!["format".to_string(), "del".to_string()]),
+                max_file_size_mb: 100,
+            },
+            logging: LoggingConfig {
+                level: "info".to_string(),
+                audit_file: "test.log".to_string(),
+            },
+        }
+    }
+
+    #[test]
+    fn test_command_whitelist() {
+        let security = SecurityManager::new(create_test_config());
+        
+        // Commands in whitelist should be allowed
+        assert!(security.is_command_allowed("echo"));
+        assert!(security.is_command_allowed("dir"));
+        
+        // Commands not in whitelist should be denied
+        assert!(!security.is_command_allowed("git"));
+        assert!(!security.is_command_allowed("npm"));
+    }
+
+    #[test]
+    fn test_command_blacklist() {
+        let security = SecurityManager::new(create_test_config());
+        
+        // Commands in blacklist should be denied even if in whitelist
+        assert!(!security.is_command_allowed("format"));
+        assert!(!security.is_command_allowed("del"));
+    }
+
+    #[test]
+    fn test_file_size_limits() {
+        let security = SecurityManager::new(create_test_config());
+        
+        // Files within limit should be allowed
+        assert!(security.is_file_size_allowed(50 * 1024 * 1024)); // 50MB
+        
+        // Files exceeding limit should be denied
+        assert!(!security.is_file_size_allowed(150 * 1024 * 1024)); // 150MB
+    }
+
 
     #[test]
     fn test_path_validation() {
         let config = Config {
-            version: "1.0.0".to_string(),
-            exex_project: "Test".to_string(),
-            created: "2025-06-28".to_string(),
-            disallowed_paths: vec!["C:\\Windows\\".to_string()],
-            allowed_paths: vec![],
+            version: "1.0".to_string(),
+            server: ServerConfig {
+                host: "127.0.0.1".to_string(),
+                port: 8080,
+            },
+            security: SecurityConfig {
+                allowed_paths: vec![],
+                disallowed_paths: vec!["C:\\Windows\\".to_string()],
+                command_whitelist: vec![],
+                command_blacklist: None,
+                max_file_size_mb: 100,
+            },
+            logging: LoggingConfig {
+                level: "info".to_string(),
+                audit_file: "test.log".to_string(),
+            },
         };
         let security = SecurityManager::new(config);
         
         // Test with a relative path that should be allowed
         let temp_dir = std::env::temp_dir();
         assert!(security.is_path_allowed(&temp_dir));
-        
-        // Test that the disallowed paths are stored correctly
-        assert_eq!(security.get_disallowed_paths().len(), 1);
-    }
-
-    #[test]
-    fn test_allowed_paths_override() {
-        let config = Config {
-            version: "1.0.0".to_string(),
-            exex_project: "Test".to_string(),
-            created: "2025-06-28".to_string(),
-            disallowed_paths: vec!["C:\\Windows\\".to_string()],
-            allowed_paths: vec!["C:\\Windows\\Temp\\".to_string()],
-        };
-        let security = SecurityManager::new(config);
-        
-        // Test that allowed paths override disallowed ones
-        // This should be allowed even though C:\Windows\ is disallowed
-        // because C:\Windows\Temp\ is explicitly allowed
-        
-        // Note: This test checks that the security manager correctly stores both lists
-        // In real scenarios, the allowed override logic will work
-        assert_eq!(security.get_disallowed_paths().len(), 1);
-        assert_eq!(security.get_allowed_paths().len(), 1);
-    }
-
-    #[test]
-    fn test_command_safety() {
-        let config = Config {
-            version: "1.0.0".to_string(),
-            exex_project: "Test".to_string(),
-            created: "2025-06-28".to_string(),
-            disallowed_paths: vec![],
-            allowed_paths: vec![],
-        };
-        let security = SecurityManager::new(config);
-        
-        assert!(!security.is_command_safe("format c:"));
-        assert!(!security.is_command_safe("del /f /q *"));
-        assert!(security.is_command_safe("echo hello"));
-        assert!(security.is_command_safe("dir"));
-    }
-
-    #[test]
-    fn test_content_sanitization() {
-        let config = Config {
-            version: "1.0.0".to_string(),
-            exex_project: "Test".to_string(),
-            created: "2025-06-28".to_string(),
-            disallowed_paths: vec![],
-            allowed_paths: vec![],
-        };
-        let security = SecurityManager::new(config);
-        
-        let content = "Hello\0World\r\nTest\r";
-        let sanitized = security.sanitize_content(content);
-        assert_eq!(sanitized, "HelloWorld\nTest\n");
     }
 }

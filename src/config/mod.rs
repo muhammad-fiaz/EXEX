@@ -1,4 +1,4 @@
-use crate::models::Config;
+use crate::models::{Config, ServerConfig, SecurityConfig, LoggingConfig};
 use std::fs;
 use std::path::PathBuf;
 use tracing::{info, warn, error};
@@ -111,12 +111,62 @@ pub fn get_default_config() -> Config {
         )
     };
 
+    // Get default audit file path
+    let audit_file = get_config_dir()
+        .map(|mut path| {
+            path.push("audit.log");
+            path.to_string_lossy().to_string()
+        })
+        .unwrap_or_else(|_| "audit.log".to_string());
+
     Config {
-        version: "1.0.0".to_string(),
-        exex_project: "Secure Local Execution Daemon".to_string(),
-        created: "2025-06-28".to_string(),
-        disallowed_paths,
-        allowed_paths,
+        version: "1.0".to_string(),
+        server: ServerConfig {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+        },
+        security: SecurityConfig {
+            allowed_paths,
+            disallowed_paths,
+            command_whitelist: vec![
+                "npm".to_string(),
+                "node".to_string(),
+                "git".to_string(),
+                "code".to_string(),
+                "python".to_string(),
+                "pip".to_string(),
+                "cargo".to_string(),
+                "rustc".to_string(),
+                "echo".to_string(),
+                "dir".to_string(),
+                "ls".to_string(),
+                "pwd".to_string(),
+                "whoami".to_string(),
+            ],
+            command_blacklist: Some(vec![
+                "rm".to_string(),
+                "rmdir".to_string(),
+                "del".to_string(),
+                "format".to_string(),
+                "fdisk".to_string(),
+                "shutdown".to_string(),
+                "reboot".to_string(),
+                "halt".to_string(),
+                "poweroff".to_string(),
+                "mkfs".to_string(),
+                "dd".to_string(),
+                "sudo".to_string(),
+                "su".to_string(),
+                "passwd".to_string(),
+                "chmod".to_string(),
+                "chown".to_string(),
+            ]),
+            max_file_size_mb: 100,
+        },
+        logging: LoggingConfig {
+            level: "info".to_string(),
+            audit_file,
+        },
     }
 }
 
@@ -127,28 +177,44 @@ pub fn validate_config(config: &Config) -> Result<(), String> {
         return Err("Configuration must have a version field".to_string());
     }
     
-    if config.exex_project.trim().is_empty() {
-        return Err("Configuration must have an exex_project field".to_string());
+    if config.server.host.trim().is_empty() {
+        return Err("Server host cannot be empty".to_string());
     }
     
-    if config.created.trim().is_empty() {
-        return Err("Configuration must have a created field".to_string());
+    if config.server.port == 0 {
+        return Err("Server port must be greater than 0".to_string());
     }
     
-    if config.disallowed_paths.is_empty() {
-        return Err("Configuration must have at least one disallowed path".to_string());
+    // Validate security configuration
+    if config.security.max_file_size_mb == 0 {
+        return Err("Max file size must be greater than 0".to_string());
     }
     
     // Validate path content
-    for path in &config.disallowed_paths {
+    for path in &config.security.disallowed_paths {
         if path.trim().is_empty() {
             return Err("Disallowed paths cannot be empty".to_string());
         }
     }
     
-    for path in &config.allowed_paths {
+    for path in &config.security.allowed_paths {
         if path.trim().is_empty() {
             return Err("Allowed paths cannot be empty".to_string());
+        }
+    }
+    
+    // Validate command lists
+    for cmd in &config.security.command_whitelist {
+        if cmd.trim().is_empty() {
+            return Err("Command whitelist entries cannot be empty".to_string());
+        }
+    }
+    
+    if let Some(blacklist) = &config.security.command_blacklist {
+        for cmd in blacklist {
+            if cmd.trim().is_empty() {
+                return Err("Command blacklist entries cannot be empty".to_string());
+            }
         }
     }
     
@@ -162,17 +228,18 @@ pub fn validate_config(config: &Config) -> Result<(), String> {
     };
     
     for critical in &critical_paths {
-        if !config.disallowed_paths.iter().any(|p| p.contains(critical)) {
+        if !config.security.disallowed_paths.iter().any(|p| p.contains(critical)) {
             warn!("Critical path {} is not in disallowed paths", critical);
         }
     }
     
     info!("Configuration validation successful:");
     info!("  Version: {}", config.version);
-    info!("  Project: {}", config.exex_project);
-    info!("  Created: {}", config.created);
-    info!("  Disallowed paths: {}", config.disallowed_paths.len());
-    info!("  Allowed paths: {}", config.allowed_paths.len());
+    info!("  Server: {}:{}", config.server.host, config.server.port);
+    info!("  Disallowed paths: {}", config.security.disallowed_paths.len());
+    info!("  Allowed paths: {}", config.security.allowed_paths.len());
+    info!("  Command whitelist: {}", config.security.command_whitelist.len());
+    info!("  Max file size: {} MB", config.security.max_file_size_mb);
     
     Ok(())
 }

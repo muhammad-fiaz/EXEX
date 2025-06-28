@@ -2,23 +2,26 @@ use actix_web::{web, HttpResponse, Result};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
-use tracing::{info, error};
+
+use tracing::{info, error, warn};
 
 use crate::models::{ExecRequest, ExecResponse, ErrorResponse};
 use crate::security::SecurityManager;
 
-/// Handles command execution requests
+/// Handles command execution requests with enhanced security
 pub async fn exec_command(
     security: web::Data<Arc<SecurityManager>>,
     req: web::Json<ExecRequest>,
 ) -> Result<HttpResponse> {
     let command = req.command.clone();
+    let args = req.args.clone();
     let cwd = req.cwd.clone();
 
-    // Check command safety
-    if !security.is_command_safe(&command) {
+    // Check command whitelist/blacklist
+    if !security.is_command_allowed(&command) {
+        warn!("Command execution denied: {}", command);
         return Ok(HttpResponse::Forbidden().json(ErrorResponse {
-            error: "Command contains potentially dangerous operations".to_string(),
+            error: format!("Command '{}' is not allowed by security policy", command),
         }));
     }
 
@@ -26,24 +29,33 @@ pub async fn exec_command(
     if let Some(ref cwd_str) = cwd {
         let cwd_path = PathBuf::from(cwd_str);
         if !security.is_path_allowed(&cwd_path) {
+            warn!("Working directory access denied: {}", cwd_str);
             return Ok(HttpResponse::Forbidden().json(ErrorResponse {
                 error: format!("Access denied to directory: {}", cwd_str),
             }));
         }
     }
 
-    info!("Executing command: '{}' in {:?}", command, cwd);
+    info!("Executing command: '{}' with args: {:?} in {:?}", command, args, cwd);
 
     // Execute command in a blocking thread
     let result = web::block(move || {
-        let mut cmd = if cfg!(target_os = "windows") {
-            let mut c = Command::new("cmd");
-            c.args(["/C", &command]);
+        let mut cmd = if let Some(ref command_args) = args {
+            // If args are provided separately, use them directly
+            let mut c = Command::new(&command);
+            c.args(command_args);
             c
         } else {
-            let mut c = Command::new("sh");
-            c.args(["-c", &command]);
-            c
+            // Backward compatibility: if no args provided, use shell execution
+            if cfg!(target_os = "windows") {
+                let mut c = Command::new("cmd");
+                c.args(["/C", &command]);
+                c
+            } else {
+                let mut c = Command::new("sh");
+                c.args(["-c", &command]);
+                c
+            }
         };
 
         if let Some(cwd_str) = cwd {

@@ -115,7 +115,23 @@ EXEX automatically creates its configuration file at the appropriate location fo
     "disallowed_paths": [
       "C:\\Windows\\System32",
       "C:\\Program Files"
-    ]
+    ],
+    "command_whitelist": [
+      "git",
+      "npm",
+      "node",
+      "echo"
+    ],
+    "command_blacklist": [
+      "format",
+      "del",
+      "rmdir"
+    ],
+    "max_file_size_mb": 100
+  },
+  "logging": {
+    "level": "info",
+    "audit_file": "exex.audit.log"
   }
 }
 ```
@@ -394,9 +410,17 @@ Returns server status and version information.
 **Request:**
 ```json
 {
-  "command": "dir",
-  "args": ["C:\\Users\\username\\Documents"],
-  "working_directory": "C:\\Users\\username"
+  "command": "git",
+  "args": ["status", "--porcelain"],
+  "cwd": "C:\\Users\\username\\Documents\\MyProject"
+}
+```
+
+**Alternative (Backward Compatible):**
+```json
+{
+  "command": "git status --porcelain",
+  "cwd": "C:\\Users\\username\\Documents\\MyProject"
 }
 ```
 
@@ -406,10 +430,16 @@ Returns server status and version information.
   "success": true,
   "stdout": "Directory listing output...",
   "stderr": "",
-  "exit_code": 0,
-  "execution_time_ms": 150
+  "exit_code": 0
 }
 ```
+
+**Parameters:**
+- `command` (string, required): The command or executable to run
+- `args` (array of strings, optional): Command arguments as separate array elements
+- `cwd` (string, optional): Working directory for command execution
+
+**Note:** If `args` is provided, the command will be executed directly with the specified arguments. If `args` is not provided, the command will be executed through the system shell (cmd on Windows, sh on Unix), allowing for shell features like pipes and redirection.
 
 ### Application Operations
 
@@ -495,12 +525,18 @@ class ExexClient {
     }
 
     // Command execution
-    async executeCommand(command, args = [], workingDirectory = null) {
-        return await this.makeRequest('/api/exec', {
+    async executeCommand(command, args = null, workingDirectory = null) {
+        const payload = {
             command,
-            args,
-            working_directory: workingDirectory
-        });
+            cwd: workingDirectory
+        };
+        
+        // Add args if provided
+        if (args && args.length > 0) {
+            payload.args = args;
+        }
+        
+        return await this.makeRequest('/api/exec', payload);
     }
 
     // Application operations
@@ -524,8 +560,12 @@ client.readFile('C:\\Users\\username\\Documents\\file.txt')
 client.writeFile('C:\\Users\\username\\Documents\\output.txt', 'Hello, World!')
     .then(result => console.log('Write result:', result));
 
-// Execute a command
-client.executeCommand('echo', ['Hello from command line'])
+// Execute a command (using args array - recommended)
+client.executeCommand('git', ['status', '--porcelain'], 'C:\\Users\\username\\MyProject')
+    .then(result => console.log('Git status:', result.stdout));
+
+// Execute a command (using single command string - backward compatible)
+client.executeCommand('echo "Hello from command line"')
     .then(result => console.log('Command output:', result.stdout));
 
 // Scan directory
@@ -589,12 +629,23 @@ function Get-ExexDirectoryContents {
 
 # Command execution
 function Invoke-ExexCommand {
-    param([string]$Command, [string[]]$Args = @(), [string]$WorkingDirectory = $null)
-    return Invoke-ExexApi -Endpoint "/api/exec" -Data @{
+    param(
+        [string]$Command, 
+        [string[]]$Args = $null, 
+        [string]$WorkingDirectory = $null
+    )
+    
+    $data = @{
         command = $Command
-        args = $Args
-        working_directory = $WorkingDirectory
+        cwd = $WorkingDirectory
     }
+    
+    # Add args if provided
+    if ($Args -and $Args.Count -gt 0) {
+        $data.args = $Args
+    }
+    
+    return Invoke-ExexApi -Endpoint "/api/exec" -Data $data
 }
 
 # Application operations
@@ -615,8 +666,12 @@ Write-Host "File content: $($fileContent.content)"
 $writeResult = Write-ExexFile -Path "C:\Users\username\Documents\output.txt" -Content "Hello from PowerShell!"
 Write-Host "Write successful: $($writeResult.success)"
 
-# Execute command
-$cmdResult = Invoke-ExexCommand -Command "echo" -Args @("Hello", "World")
+# Execute command (using args array - recommended)
+$gitResult = Invoke-ExexCommand -Command "git" -Args @("status", "--porcelain") -WorkingDirectory "C:\Users\username\MyProject"
+Write-Host "Git status: $($gitResult.stdout)"
+
+# Execute command (using single command string - backward compatible)
+$cmdResult = Invoke-ExexCommand -Command "echo Hello World"
 Write-Host "Command output: $($cmdResult.stdout)"
 
 # Scan directory
@@ -640,10 +695,15 @@ curl -X POST http://127.0.0.1:8080/api/file/write \
   -H "Content-Type: application/json" \
   -d '{"path": "C:\\Users\\username\\Documents\\output.txt", "content": "Hello from cURL!", "append": false}'
 
-# Execute command
+# Execute command (using args array - recommended)
 curl -X POST http://127.0.0.1:8080/api/exec \
   -H "Content-Type: application/json" \
-  -d '{"command": "echo", "args": ["Hello", "World"]}'
+  -d '{"command": "git", "args": ["status", "--porcelain"], "cwd": "C:\\Users\\username\\MyProject"}'
+
+# Execute command (using single command string - backward compatible)
+curl -X POST http://127.0.0.1:8080/api/exec \
+  -H "Content-Type: application/json" \
+  -d '{"command": "echo Hello World"}'
 
 # Scan directory
 curl -X POST http://127.0.0.1:8080/api/file/scan \
@@ -1027,8 +1087,12 @@ CMD ["exex"]
       "git",
       "code"
     ],
-    "max_file_size_mb": 100,
-    "max_execution_time_seconds": 30
+    "command_blacklist": [
+      "format",
+      "del",
+      "rmdir"
+    ],
+    "max_file_size_mb": 100
   },
   "logging": {
     "level": "info",
@@ -1083,16 +1147,4 @@ CMD ["exex"]
 3. **Streaming**: Use streaming for large files
 4. **Memory Management**: Monitor memory usage in long-running processes
 5. **Resource Cleanup**: Always clean up resources after use
-
----
-
-## 📞 Support & Community
-
-For questions, issues, or contributions:
-
-- **Issues**: [GitHub Issues](https://github.com/your-repo/exex/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/exex/discussions)
-- **Documentation**: This README serves as the complete documentation
-- **Contributing**: See contributing guidelines above
-
-**EXEX** - Empowering secure local automation for modern applications.
+```
